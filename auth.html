@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · bọyọ</title>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta name="theme-color" content="#f4efe6">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <div class="topbar"><a class="brand" href="/" aria-label="bọyọ home"><svg class="logo" role="img" aria-label="bọyọ"><use href="/brand/sprite.svg#logo"/></svg></a></div>
+
+  <div class="tabs" role="tablist" aria-label="Account">
+    <a class="tab" id="tLogin" role="tab" href="/login" style="text-align:center;text-decoration:none">Sign in</a>
+    <a class="tab" id="tSignup" role="tab" href="/signup" style="text-align:center;text-decoration:none">Create account</a>
+  </div>
+
+  <form class="card" id="form" novalidate>
+    <header><h2 id="title"></h2><p id="lead"></p></header>
+    <label class="f" id="nameRow" for="name">Organization name<input type="text" id="name" autocomplete="organization" placeholder="e.g. GDG University of Uyo"></label>
+    <label class="f" for="email"><span id="idLabel">Email</span><input type="email" id="email" autocomplete="email"></label>
+    <label class="f" for="password">Password<input type="password" id="password" autocomplete="current-password"></label>
+    <label class="f" id="codeRow" for="code" hidden>Signup code<input type="text" id="code" autocomplete="off"><span class="muted small" style="font-weight:400">Ask the platform owner for this code.</span></label>
+    <div class="actions"><button class="btn" id="submit" type="submit"></button></div>
+    <div class="err" id="err" role="alert"></div>
+  </form>
+</div>
+
+<script src="/app.js"></script>
+<script>
+(async function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var signup = location.pathname === '/signup';
+  $('tLogin').setAttribute('aria-selected', String(!signup));
+  $('tSignup').setAttribute('aria-selected', String(signup));
+  $('title').textContent = signup ? 'Create your organizer account' : 'Welcome back';
+  $('lead').textContent = signup ? 'One account can run as many events as you like.' : 'Company owners and front-desk staff sign in here, each with their own login.';
+  $('submit').textContent = signup ? 'Create account' : 'Sign in';
+  $('nameRow').hidden = !signup;
+  if (!signup) { $('email').type = 'text'; $('email').autocomplete = 'username'; $('email').setAttribute('autocapitalize', 'none'); $('idLabel').textContent = 'Email or front-desk login'; }
+  $('password').autocomplete = signup ? 'new-password' : 'current-password';
+  document.title = (signup ? 'Create account' : 'Sign in') + ' · bọyọ';
+
+  try { await BY.api('/api/org/me'); location.replace('/dashboard'); return; } catch (e) {}
+  if (signup) {
+    try { var c = await BY.api('/api/org/config'); $('codeRow').hidden = !c.signup_code_required; } catch (e) {}
+  }
+
+  $('form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    $('err').textContent = ''; $('submit').disabled = true;
+    try {
+      await BY.api(signup ? '/api/org/signup' : '/api/org/login', { method: 'POST', body: {
+        name: $('name').value, email: $('email').value, password: $('password').value, code: $('code').value
+      } });
+      location.href = '/dashboard';
+    } catch (err) { $('err').textContent = err.message; $('submit').disabled = false; }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "boyo",
+  "version": "0.1.0",
+  "description": "Multi-organization event registration, QR tickets and fast gate check-in",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js",
+    "seed:demo": "node scripts/seed-demo.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "express": "^4.19.2",
+    "jsqr": "^1.4.0",
+    "nodemailer": "^6.10.1",
+    "qrcode": "^1.5.3"
+  }
+}

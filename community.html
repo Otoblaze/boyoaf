@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendee directory</title>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta name="theme-color" content="#f4efe6">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap mid">
+  <div class="card">
+    <h1 id="title">Attendee directory</h1>
+    <p class="muted">People who chose to be visible. Want to be listed? Tick the directory box when you register.</p>
+    <label class="f" for="q">Search<input type="text" id="q" placeholder="Name, role or interest" autocomplete="off"></label>
+  </div>
+  <div id="list" style="display:grid;gap:10px"></div>
+  <p><a id="back" href="/">&larr; Back to the event</a></p>
+</div>
+
+<script src="/app.js"></script>
+<script>
+(async function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var slug = location.pathname.split('/').filter(Boolean)[1] || '', people = [];
+  try {
+    var ev = await BY.api('/api/e/' + encodeURIComponent(slug));
+    BY.applyTheme(ev.theme);
+    document.title = 'Attendees · ' + ev.name;
+    $('title').textContent = ev.name + ' attendees';
+    $('back').href = '/e/' + encodeURIComponent(ev.slug);
+    people = await BY.api('/api/e/' + encodeURIComponent(slug) + '/community');
+  } catch (e) { $('list').innerHTML = '<div class="card empty"><p>We could not find that event.</p></div>'; return; }
+
+  function draw() {
+    var q = $('q').value.trim().toLowerCase();
+    var rows = people.filter(function (p) { return !q || [p.name, p.organization, p.role, p.interests].join(' ').toLowerCase().indexOf(q) !== -1; });
+    $('list').innerHTML = rows.map(function (p) {
+      return '<div class="card" style="gap:4px"><b>' + BY.esc(p.name) + '</b>' +
+        '<div class="muted small">' + BY.esc([p.role, p.organization].filter(Boolean).join(' · ')) + '</div>' +
+        (p.interests ? '<div>' + BY.esc(p.interests) + '</div>' : '') + '</div>';
+    }).join('') || '<div class="card empty"><p>No one is listed yet.</p></div>';
+  }
+  $('q').addEventListener('input', draw);
+  draw();
+})();
+</script>
+<a class="powered" href="/" aria-label="Powered by bọyọ"><span>Powered by</span><svg class="logo" role="img" aria-label="bọyọ"><use href="/brand/sprite.svg#logo"/></svg></a>
+</body>
+</html>

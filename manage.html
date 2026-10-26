@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manage event · bọyọ</title>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta name="theme-color" content="#f4efe6">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="brand" href="/dashboard">&larr; All events</a>
+    <div class="actions"><span class="muted small" id="orgName"></span><button class="ghost" id="logout" type="button">Sign out</button></div>
+  </div>
+
+  <div class="topbar">
+    <div><p class="eyebrow" id="eyebrow">Event</p><h1 id="heading">New event</h1></div>
+    <a class="btn line small" id="viewPage" href="#" target="_blank" rel="noopener" hidden>View public page</a>
+  </div>
+
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Sections" hidden>
+    <button class="tab" role="tab" data-tab="overview" aria-selected="true" type="button">Overview</button>
+    <button class="tab" role="tab" data-tab="details" aria-selected="false" type="button">Details and branding</button>
+    <button class="tab" role="tab" data-tab="guests" aria-selected="false" type="button">Guest list</button>
+    <button class="tab" role="tab" data-tab="people" aria-selected="false" type="button">Attendees</button>
+    <button class="tab" role="tab" data-tab="report" aria-selected="false" type="button">Report</button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section id="p-overview" hidden>
+    <div class="grid2">
+      <div class="card">
+        <header><h2>Live numbers</h2></header>
+        <div class="tiles" id="tiles"></div>
+        <div><h3 style="margin-bottom:6px">Latest check-ins</h3><div class="rows" id="recent"></div></div>
+      </div>
+      <div style="display:grid;gap:16px">
+        <div class="card">
+          <header><h2>Share your event</h2><p>Send this link to attendees. It shows your flyer and the registration form.</p></header>
+          <div class="copyline"><input type="text" id="shareUrl" readonly aria-label="Public event link"><button class="btn small" id="copyShare" type="button">Copy</button></div>
+        </div>
+        <div class="card">
+          <header><h2>Gate scanner</h2><p id="scanText">Give volunteers the scanner link and key. They open it on a phone, allow the camera and scan tickets.</p></header>
+          <div class="copyline"><input type="text" id="scanUrl" readonly aria-label="Scanner link"><button class="btn small" id="copyScan" type="button">Copy</button></div>
+          <div class="copyline" id="gateKeyRow"><input type="password" id="gateKey" readonly aria-label="Gate key"><button class="btn small line" id="showKey" type="button">Show</button><button class="btn small" id="copyKey" type="button">Copy</button></div>
+          <div class="actions">
+            <a class="btn small" id="openScan" href="#" target="_blank" rel="noopener">Open scanner</a>
+            <button class="btn small line" id="rotate" type="button">Change key</button>
+          </div>
+          <p class="muted small" id="keyNote">Changing the key signs out every scanner using the old one.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DETAILS -->
+  <section id="p-details" hidden>
+    <div class="grid2">
+      <form class="card" id="form" novalidate>
+        <header><h2 id="formTitle">Event details</h2><p>Upload your flyer first. We pick colors from it for the event page and tickets, and you can adjust them.</p></header>
+
+        <div>
+          <label class="f" for="flyerFile">Flyer (JPG, PNG or WebP, up to 6 MB)</label>
+          <input type="file" id="flyerFile" accept="image/jpeg,image/png,image/webp">
+          <div class="actions" style="margin-top:8px"><button class="btn small line" id="removeFlyer" type="button" hidden>Remove flyer</button></div>
+        </div>
+
+        <div class="drop" id="gcal" hidden>
+          <h3 id="gcalTitle">Pick the date from your Google Calendar</h3>
+          <p class="muted small" id="gcalText"></p>
+          <div class="actions" id="gcalConnect" hidden><a class="btn small" id="gcalLink" href="#">Connect Google Calendar</a></div>
+          <div id="gcalChoose" hidden style="display:grid;gap:8px">
+            <label class="f" for="gcalPick">Upcoming events<select id="gcalPick"><option value="">Choose an event from your calendar</option></select></label>
+            <div class="actions"><button class="btn small line" id="gcalRefresh" type="button">Refresh</button><button class="btn small line" id="gcalOff" type="button">Disconnect</button></div>
+          </div>
+          <p class="small" id="gcalNote" role="status"></p>
+        </div>
+
+        <label class="f" for="name">Event name *<input type="text" id="name" maxlength="120" placeholder="e.g. Tech Ignite '26"></label>
+        <label class="f" for="tagline">Tagline<input type="text" id="tagline" maxlength="160" placeholder="One line under the name"></label>
+        <div class="fields">
+          <label class="f" for="startsAt">Date and time<input type="datetime-local" id="startsAt"></label>
+          <label class="f" for="endsAt">Ends (optional)<input type="datetime-local" id="endsAt"></label>
+          <label class="f" for="capacity">Capacity (0 = no limit)<input type="number" id="capacity" min="0" step="1" value="0"></label>
+        </div>
+        <label class="f" for="venue">Venue<input type="text" id="venue" maxlength="200"></label>
+        <label class="f" for="description">About the event<textarea id="description" maxlength="4000" placeholder="What attendees should know"></textarea></label>
+
+        <div>
+          <h3 style="margin-bottom:8px">Colors</h3>
+          <div class="fields" style="grid-template-columns:repeat(3,1fr)">
+            <label class="f" for="cBg">Background<input type="color" id="cBg" value="#101614"></label>
+            <label class="f" for="cInk">Text<input type="color" id="cInk" value="#f2f5f1"></label>
+            <label class="f" for="cAccent">Buttons<input type="color" id="cAccent" value="#45bfb0"></label>
+          </div>
+          <div class="actions" style="margin-top:8px"><button class="btn small line" id="reuse" type="button" hidden>Pick colors from flyer again</button><span class="muted small" id="paletteNote"></span></div>
+        </div>
+
+        <label class="check" for="regOpen"><input type="checkbox" id="regOpen" checked><span>Registration is open</span></label>
+        <label class="check" for="listed"><input type="checkbox" id="listed" checked><span>Show this event to people who have registered for other events on bọyọ. Only your event name, date, place and flyer are shown, and only while registration is open and the event is in the future.</span></label>
+
+        <div class="actions"><button class="btn" id="save" type="submit">Save event</button><span class="err" id="err" role="alert"></span></div>
+      </form>
+
+      <div style="display:grid;gap:16px;position:sticky;top:12px">
+        <div class="card">
+          <header><h2>Preview</h2><p>How attendees see your page.</p></header>
+          <div class="preview" id="preview">
+            <div id="pvFlyer"></div>
+            <div><h2 id="pvName" style="font-size:1.3rem">Your event name</h2><p id="pvTag" class="small" style="opacity:.75"></p></div>
+            <span class="btn" id="pvBtn" style="justify-self:start">Register</span>
+          </div>
+        </div>
+        <div class="card" id="danger" hidden>
+          <header><h2>Delete event</h2><p>Removes the event, its flyer and every registration. This cannot be undone.</p></header>
+          <label class="f" for="confirmDel">Type <b id="delSlug"></b> to confirm<input type="text" id="confirmDel" autocomplete="off"></label>
+          <div class="actions"><button class="btn danger small" id="del" type="button">Delete event</button><span class="err" id="delErr"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GUEST LIST -->
+  <section id="p-guests" hidden>
+    <div class="card">
+      <header><h2>Expected guests</h2><p>Upload a CSV of the people you are expecting. Each one shows as registered or checked in once they sign up with the same email, so you can see who is missing and keep the names for your programme.</p></header>
+      <div class="drop" id="guestImport">
+        <label class="f" for="guestFile">CSV file<input type="file" id="guestFile" accept=".csv,.txt,text/csv,text/plain"></label>
+        <p class="muted small">Use headings such as <b>Name</b>, <b>Email</b>, <b>Organization</b>, <b>Role</b>, <b>Phone</b>. Only a name is required. Working in Excel? Choose Save as, then CSV.</p>
+        <div class="actions"><button class="btn small" id="guestUpload" type="button" disabled>Add to guest list</button><a class="btn small line" id="guestTemplate" href="#">Download a template</a></div>
+        <div class="err" id="guestErr" role="alert"></div>
+        <div id="guestReport" class="small" aria-live="polite"></div>
+      </div>
+      <div class="topbar">
+        <div class="tiles" id="guestTiles" style="flex:1"></div>
+        <div class="actions"><a class="btn small line" id="guestCsv" href="#">Download list</a><button class="btn small line" id="guestClear" type="button">Clear list</button></div>
+      </div>
+      <label class="f" for="guestFilter">Search<input type="text" id="guestFilter" placeholder="Name, email, phone or organization" autocomplete="off"></label>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Guest</th><th>Organization</th><th>Status</th><th></th></tr></thead>
+          <tbody id="guestRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ATTENDEES -->
+  <section id="p-people" hidden>
+    <div class="card">
+      <div class="topbar">
+        <h2>Attendees</h2>
+        <div class="actions"><a class="btn small line" id="csv" href="#">Download CSV</a></div>
+      </div>
+      <div class="fields" style="grid-template-columns:1fr">
+        <label class="f" for="filter">Search<input type="text" id="filter" placeholder="Name, email or organization" autocomplete="off"></label>
+      </div>
+      <details>
+        <summary style="cursor:pointer;font-weight:600">Add someone at the door</summary>
+        <form id="walkin" style="display:grid;gap:10px;margin-top:10px" novalidate>
+          <div class="fields">
+            <label class="f" for="wName">Name *<input type="text" id="wName" autocomplete="off"></label>
+            <label class="f" for="wEmail">Email *<input type="email" id="wEmail" autocomplete="off"></label>
+            <label class="f" for="wPhone">Phone (optional)<input type="tel" id="wPhone" autocomplete="off"></label>
+          </div>
+          <label class="check" for="wIn"><input type="checkbox" id="wIn" checked><span>Check them in now</span></label>
+          <div class="actions"><button class="btn small" type="submit">Add attendee</button><span class="err" id="wErr" role="alert"></span></div>
+        </form>
+      </details>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Attendee</th><th>Organization</th><th>Community</th><th>Status</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORT -->
+  <section id="p-report" hidden>
+    <div class="card">
+      <header><h2>Event report</h2><p>How your event went: turnout, when people arrived, who came, and how many joined your community. Open it any time, even while the event is running. It reflects the check-ins recorded so far.</p></header>
+      <div class="actions">
+        <a class="btn small" id="repView" href="#" target="_blank" rel="noopener">View and print</a>
+        <a class="btn small line" id="repDownload" href="#">Download</a>
+        <button class="btn small line" id="repEmail" type="button">Email it to me</button>
+      </div>
+      <p class="muted small" id="repMailNote"></p>
+      <div class="err" id="repErr" role="alert"></div>
+      <div class="tiles" id="repTiles"></div>
+      <div id="repHead" class="small"></div>
+    </div>
+  </section>
+
+  <p class="toast" id="toast" aria-live="polite"></p>
+</div>
+
+<script src="/app.js"></script>
+<script>
+(async function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var seg = location.pathname.split('/').filter(Boolean).pop();
+  var isNew = seg === 'new';
+  var eventId = isNew ? null : Number(seg);
+  var ev = null, people = [], flyerFile = null, flyerRemoved = false, tab = 'overview', timer = null, toastT = null;
+
+  function toast(m) { $('toast').textContent = m; clearTimeout(toastT); toastT = setTimeout(function () { $('toast').textContent = ''; }, 5000); }
+
+  var org, role = 'owner';
+  try { var me = await BY.api('/api/org/me'); org = me.org; role = me.role; } catch (e) { location.replace('/login'); return; }
+  var desk = role === 'desk';
+  if (desk && isNew) { location.replace('/dashboard'); return; }
+  $('orgName').textContent = org.name;
+  $('logout').onclick = async function () { try { await BY.api('/api/org/logout', { method: 'POST' }); } catch (e) {} location.href = '/login'; };
+
+  /* ---------- tabs ---------- */
+  function setTab(name) {
+    tab = name;
+    ['overview', 'details', 'guests', 'people', 'report'].forEach(function (t) { $('p-' + t).hidden = t !== name; });
+    document.querySelectorAll('.tab').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === name)); });
+    clearInterval(timer);
+    if (name === 'overview') { refreshOverview(); timer = setInterval(refreshOverview, 10000); }
+    if (name === 'guests') { loadGuests(); timer = setInterval(loadGuests, 10000); }
+    if (name === 'report') loadReport();
+    if (name === 'people') { loadPeople(); timer = setInterval(loadPeople, 10000); }
+  }
+  $('tabs').addEventListener('click', function (e) { var b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+
+  /* ---------- date helpers ---------- */
+  function toLocalInput(iso) {
+    if (!iso) return '';
+    var d = new Date(iso); if (isNaN(d)) return '';
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function fromLocalInput(v) { return v ? new Date(v).toISOString() : ''; }
+
+  /* ---------- details form + preview ---------- */
+  function theme() { return { bg: $('cBg').value, ink: $('cInk').value, accent: $('cAccent').value }; }
+  var flyerPreviewUrl = null;
+  function renderPreview() {
+    BY.applyTheme(theme(), $('preview'));
+    $('preview').style.background = $('cBg').value; $('preview').style.color = $('cInk').value;
+    $('pvName').textContent = $('name').value.trim() || 'Your event name';
+    $('pvTag').textContent = $('tagline').value.trim();
+    var src = flyerPreviewUrl || (!flyerRemoved && ev && ev.flyer_url) || '';
+    $('pvFlyer').innerHTML = src ? '<img alt="Flyer preview" src="' + BY.esc(src) + '">' : '<div class="ph">Your flyer appears here</div>';
+    $('removeFlyer').hidden = !(src);
+    $('reuse').hidden = !src;
+  }
+  ['name', 'tagline', 'cBg', 'cInk', 'cAccent'].forEach(function (id) { $(id).addEventListener('input', renderPreview); });
+
+  function paletteFrom(src) {
+    var img = new Image();
+    img.onload = function () {
+      var t = BY.extractPalette(img);
+      $('cBg').value = t.bg; $('cInk').value = t.ink; $('cAccent').value = t.accent;
+      $('paletteNote').textContent = 'Colors picked from your flyer. Adjust them if you like.';
+      renderPreview();
+    };
+    img.onerror = function () { $('paletteNote').textContent = 'Could not read colors from that image.'; };
+    img.src = src;
+  }
+  $('flyerFile').addEventListener('change', function () {
+    var f = this.files[0]; $('err').textContent = '';
+    if (!f) return;
+    if (['image/jpeg', 'image/png', 'image/webp'].indexOf(f.type) === -1) { $('err').textContent = 'Use a JPG, PNG or WebP image.'; this.value = ''; return; }
+    if (f.size > 6 * 1024 * 1024) { $('err').textContent = 'That image is over 6 MB. Export a smaller version.'; this.value = ''; return; }
+    flyerFile = f; flyerRemoved = false;
+    if (flyerPreviewUrl) URL.revokeObjectURL(flyerPreviewUrl);
+    flyerPreviewUrl = URL.createObjectURL(f);
+    paletteFrom(flyerPreviewUrl);
+    renderPreview();
+  });
+  $('reuse').onclick = function () { var s = flyerPreviewUrl || (ev && ev.flyer_url); if (s) paletteFrom(s); };
+  $('removeFlyer').onclick = function () {
+    flyerFile = null; flyerRemoved = true; $('flyerFile').value = '';
+    if (flyerPreviewUrl) { URL.revokeObjectURL(flyerPreviewUrl); flyerPreviewUrl = null; }
+    renderPreview();
+  };
+
+  function fillForm(e) {
+    $('name').value = e.name; $('tagline').value = e.tagline; $('venue').value = e.venue; $('description').value = e.description;
+    $('startsAt').value = toLocalInput(e.starts_at); $('endsAt').value = toLocalInput(e.ends_at); $('capacity').value = e.capacity;
+    $('cBg').value = e.theme.bg; $('cInk').value = e.theme.ink; $('cAccent').value = e.theme.accent;
+    $('regOpen').checked = e.registration_open; $('listed').checked = isNew ? true : !!e.listed;
+    renderPreview();
+  }
+
+  $('form').addEventListener('submit', async function (ev2) {
+    ev2.preventDefault();
+    $('err').textContent = ''; $('save').disabled = true;
+    var body = {
+      name: $('name').value, tagline: $('tagline').value, venue: $('venue').value, description: $('description').value,
+      starts_at: fromLocalInput($('startsAt').value), ends_at: fromLocalInput($('endsAt').value), capacity: Number($('capacity').value || 0),
+      theme: theme(), registration_open: $('regOpen').checked, listed: $('listed').checked
+    };
+    try {
+      var saved = isNew ? await BY.api('/api/org/events', { method: 'POST', body: body })
+                        : await BY.api('/api/org/events/' + eventId, { method: 'PATCH', body: body });
+      var id = saved.id;
+      if (flyerFile) await BY.api('/api/org/events/' + id + '/flyer', { method: 'POST', headers: { 'Content-Type': flyerFile.type }, body: flyerFile });
+      else if (flyerRemoved && !isNew) await BY.api('/api/org/events/' + id + '/flyer', { method: 'DELETE' });
+      if (isNew) { location.href = '/dashboard/events/' + id; return; }
+      flyerFile = null; flyerRemoved = false; $('flyerFile').value = '';
+      if (flyerPreviewUrl) { URL.revokeObjectURL(flyerPreviewUrl); flyerPreviewUrl = null; }
+      ev = await BY.api('/api/org/events/' + id);
+      header(); fillForm(ev); toast('Saved. Your public page is updated.');
+    } catch (e) { $('err').textContent = e.message; }
+    $('save').disabled = false;
+  });
+
+  /* ---------- overview ---------- */
+  function header() {
+    $('heading').textContent = ev.name; document.title = ev.name + ' · bọyọ';
+    $('eyebrow').textContent = ev.registration_open ? 'Registration open' : 'Registration closed';
+    $('viewPage').href = '/e/' + ev.slug; $('viewPage').hidden = false;
+    var base = location.origin;
+    $('shareUrl').value = base + '/e/' + ev.slug;
+    $('scanUrl').value = base + '/scan/' + ev.slug;
+    if (!desk) $('gateKey').value = ev.gate_key;
+    $('openScan').href = '/scan/' + ev.slug + (desk ? '' : '#k=' + encodeURIComponent(ev.gate_key));
+    $('csv').href = '/api/org/events/' + ev.id + '/export.csv';
+    $('delSlug').textContent = ev.slug;
+  }
+  async function refreshOverview() {
+    try {
+      var s = await BY.api('/api/org/events/' + eventId + '/stats');
+      var pct = s.registered ? Math.round(100 * s.checked_in / s.registered) + '%' : '0%';
+      var cap = ev.capacity ? ev.capacity : 'No limit';
+      $('tiles').innerHTML = [['Registered', s.registered], ['Checked in', s.checked_in], ['Turnout', pct], ['Capacity', cap]].concat(s.expected ? [['Expected', s.expected], ['Expected, not registered', s.expected - s.expected_registered]] : [])
+        .map(function (t) { return '<div class="tile"><b>' + BY.esc(t[1]) + '</b><span>' + t[0] + '</span></div>'; }).join('');
+      $('recent').innerHTML = s.recent.length ? s.recent.map(function (r) {
+        return '<div class="row"><div><b>' + BY.esc(r.name) + '</b><div class="sub">' + BY.esc(r.organization || '') + '</div></div><span class="pill in">' + BY.esc(BY.fmtTime(r.checked_in_at)) + '</span></div>';
+      }).join('') : '<p class="muted small">No one has checked in yet.</p>';
+    } catch (e) {}
+  }
+  function wireCopy(btn, input) {
+    $(btn).onclick = function () { BY.copyText($(input).value, function () { toast('Copied.'); }, function () { $(input).select(); toast('Press Ctrl+C to copy.'); }); };
+  }
+  wireCopy('copyShare', 'shareUrl'); wireCopy('copyScan', 'scanUrl');
+  $('copyKey').onclick = function () { BY.copyText($('gateKey').value, function () { toast('Key copied.'); }, function () { toast('Show the key and copy it by hand.'); }); };
+  $('showKey').onclick = function () { var p = $('gateKey').type === 'password'; $('gateKey').type = p ? 'text' : 'password'; this.textContent = p ? 'Hide' : 'Show'; };
+  BY.armed($('rotate'), 'Click again to confirm', async function () {
+    try { var r = await BY.api('/api/org/events/' + eventId + '/rotate-key', { method: 'POST' }); ev.gate_key = r.gate_key; header(); toast('New key created. Share it with your scanners.'); }
+    catch (e) { toast(e.message); }
+  });
+
+  /* ---------- attendees ---------- */
+  function renderPeople() {
+    var q = $('filter').value.trim().toLowerCase();
+    var list = people.filter(function (a) { return !q || (a.name + ' ' + a.email + ' ' + (a.phone || '') + ' ' + a.organization).toLowerCase().indexOf(q) !== -1; });
+    $('rows').innerHTML = list.map(function (a) {
+      return '<tr><td><b>' + BY.esc(a.name) + '</b><div class="muted small">' + BY.esc(a.email) + '</div></td>' +
+        '<td>' + BY.esc(a.organization || '') + '<div class="muted small">' + BY.esc(a.role || '') + '</div></td>' +
+        '<td class="small">' + (a.consent_directory ? 'Directory' : '') + (a.consent_directory && a.consent_community ? ' · ' : '') + (a.consent_community ? 'Updates' : '') + (!a.consent_directory && !a.consent_community ? '<span class="muted">No</span>' : '') + '</td>' +
+        '<td><span class="pill ' + (a.checked_in_at ? 'in' : '') + '">' + (a.checked_in_at ? 'In ' + BY.esc(BY.fmtTime(a.checked_in_at)) : 'Not yet') + '</span></td>' +
+        '<td><div class="actions" style="justify-content:flex-end">' +
+        (a.checked_in_at ? '<button class="btn small line" data-undo="' + BY.esc(a.id) + '" type="button">Undo</button>' : '<button class="btn small" data-in="' + BY.esc(a.id) + '" type="button">Check in</button>') +
+        '<a class="btn small line" href="/t/' + BY.esc(a.token) + '" target="_blank" rel="noopener">Ticket</a>' +
+        (desk ? '' : '<button class="btn small line" data-rm="' + BY.esc(a.id) + '" type="button">Remove</button>') + '</div></td></tr>';
+    }).join('') || '<tr><td colspan="5" class="muted">No attendees yet. Share your event link to start getting registrations.</td></tr>';
+  }
+  async function loadPeople() {
+    try { people = await BY.api('/api/org/events/' + eventId + '/attendees'); renderPeople(); } catch (e) {}
+  }
+  $('filter').addEventListener('input', renderPeople);
+  var armedRm = null;
+  $('rows').addEventListener('click', async function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    try {
+      if (b.dataset['in']) { await BY.api('/api/org/events/' + eventId + '/attendees/' + b.dataset['in'] + '/checkin', { method: 'POST' }); await loadPeople(); toast('Checked in.'); }
+      else if (b.dataset.undo) { await BY.api('/api/org/events/' + eventId + '/attendees/' + b.dataset.undo + '/checkin', { method: 'DELETE' }); await loadPeople(); toast('Check-in undone.'); }
+      else if (b.dataset.rm) {
+        if (armedRm !== b.dataset.rm) { armedRm = b.dataset.rm; b.textContent = 'Confirm'; setTimeout(function () { armedRm = null; b.textContent = 'Remove'; }, 3000); return; }
+        await BY.api('/api/org/events/' + eventId + '/attendees/' + b.dataset.rm, { method: 'DELETE' }); armedRm = null; await loadPeople(); toast('Removed.');
+      }
+    } catch (err) { toast(err.message); }
+  });
+  $('walkin').addEventListener('submit', async function (e) {
+    e.preventDefault(); $('wErr').textContent = '';
+    try {
+      var r = await BY.api('/api/org/events/' + eventId + '/attendees', { method: 'POST', body: { name: $('wName').value, email: $('wEmail').value, phone: $('wPhone').value, check_in: $('wIn').checked } });
+      $('walkin').reset(); $('wIn').checked = true; await loadPeople();
+      toast(r.existing ? 'That email was already registered.' : 'Added.');
+    } catch (err) { $('wErr').textContent = err.message; }
+  });
+
+  /* ---------- guest list ---------- */
+  var guests = [], guestText = null;
+  var STATUS = { not_registered: ['Not registered', ''], registered: ['Registered', 'q'], checked_in: ['Checked in', 'in'] };
+  function renderGuests() {
+    var q = $('guestFilter').value.trim().toLowerCase();
+    var n = guests.length, reg = guests.filter(function (g) { return g.status !== 'not_registered'; }).length, inn = guests.filter(function (g) { return g.status === 'checked_in'; }).length;
+    $('guestTiles').innerHTML = n ? [['On the list', n], ['Registered', reg], ['Checked in', inn], ['Not registered', n - reg]].map(function (t) { return '<div class="tile"><b>' + t[1] + '</b><span>' + t[0] + '</span></div>'; }).join('') : '';
+    var list = guests.filter(function (g) { return !q || (g.name + ' ' + g.email + ' ' + g.organization).toLowerCase().indexOf(q) !== -1; });
+    $('guestRows').innerHTML = list.map(function (g) {
+      var st = STATUS[g.status];
+      return '<tr><td><b>' + BY.esc(g.name) + '</b><div class="muted small">' + BY.esc(g.email || 'No email') + '</div></td>' +
+        '<td>' + BY.esc(g.organization || '') + '<div class="muted small">' + BY.esc(g.role || '') + '</div></td>' +
+        '<td><span class="pill ' + st[1] + '">' + st[0] + (g.status === 'checked_in' ? ' ' + BY.esc(BY.fmtTime(g.checked_in_at)) : '') + '</span></td>' +
+        '<td><div class="actions" style="justify-content:flex-end">' +
+        (g.status === 'not_registered' ? '<button class="btn small" data-reg="' + g.id + '" type="button">Register and check in</button>' : '') +
+        (g.token ? '<a class="btn small line" href="/t/' + BY.esc(g.token) + '" target="_blank" rel="noopener">Ticket</a>' : '') +
+        (desk ? '' : '<button class="btn small line" data-grm="' + g.id + '" type="button">Remove</button>') + '</div></td></tr>';
+    }).join('') || '<tr><td colspan="4" class="muted">' + (n ? 'No match.' : 'No guests yet. Choose a CSV above to add your expected guests.') + '</td></tr>';
+    $('guestClear').hidden = desk || !n; $('guestCsv').hidden = desk || !n;
+  }
+  async function loadGuests() { try { guests = await BY.api('/api/org/events/' + eventId + '/guests'); renderGuests(); } catch (e) {} }
+  $('guestCsv').href = '/api/org/events/' + eventId + '/guests.csv';
+  $('guestTemplate').href = URL.createObjectURL(new Blob(['Name,Email,Organization,Role,Phone\r\nAda Obi,ada@example.com,GDG University of Uyo,Organizer,\r\nEmeka Udo,,Uyo Tech Hub,Speaker,\r\n'], { type: 'text/csv' }));
+  $('guestTemplate').setAttribute('download', 'guest-list-template.csv');
+  $('guestFilter').addEventListener('input', renderGuests);
+  $('guestFile').addEventListener('change', async function () {
+    var f = this.files[0]; guestText = null; $('guestErr').textContent = ''; $('guestReport').textContent = ''; $('guestUpload').disabled = true;
+    if (!f) return;
+    if (f.size > 1000000) { $('guestErr').textContent = 'That file is over 1 MB. Split it into smaller lists.'; return; }
+    if (/\.xlsx?$/i.test(f.name)) { $('guestErr').textContent = 'Excel files cannot be read directly. In Excel, choose Save as, then CSV, and upload that file.'; return; }
+    try { guestText = await f.text(); $('guestUpload').disabled = false; } catch (e) { $('guestErr').textContent = 'Could not read that file.'; }
+  });
+  $('guestUpload').addEventListener('click', async function () {
+    if (guestText == null) return;
+    $('guestErr').textContent = ''; this.disabled = true;
+    try {
+      var r = await BY.api('/api/org/events/' + eventId + '/guests/import', { method: 'POST', body: new Blob([guestText], { type: 'text/csv' }) });
+      var html = '<b>' + r.added + ' added</b>' + (r.duplicates ? ', ' + r.duplicates + ' already on the list' : '') + (r.invalid.length ? ', ' + r.invalid.length + ' skipped' : '') + '.';
+      if (r.invalid.length) html += '<ul style="margin:6px 0 0;padding-left:18px">' + r.invalid.slice(0, 8).map(function (i) { return '<li>Row ' + i.row + ': ' + BY.esc(i.reason) + '</li>'; }).join('') + (r.invalid.length > 8 ? '<li>and ' + (r.invalid.length - 8) + ' more</li>' : '') + '</ul>';
+      $('guestReport').innerHTML = html; $('guestFile').value = ''; guestText = null;
+      await loadGuests();
+    } catch (err) { $('guestErr').textContent = err.message; this.disabled = false; }
+  });
+  var armedG = null;
+  $('guestRows').addEventListener('click', async function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    try {
+      if (b.dataset.reg) {
+        var g = guests.filter(function (x) { return String(x.id) === b.dataset.reg; })[0], email = g.email;
+        if (!email) { email = (prompt('Email for ' + g.name + ' (needed for the ticket):') || '').trim(); if (!email) return; }
+        await BY.api('/api/org/events/' + eventId + '/guests/' + g.id + '/register', { method: 'POST', body: { email: email, check_in: true } });
+        await loadGuests(); toast('Registered and checked in.');
+      } else if (b.dataset.grm) {
+        if (armedG !== b.dataset.grm) { armedG = b.dataset.grm; b.textContent = 'Confirm'; setTimeout(function () { armedG = null; b.textContent = 'Remove'; }, 3000); return; }
+        await BY.api('/api/org/events/' + eventId + '/guests/' + b.dataset.grm, { method: 'DELETE' }); armedG = null; await loadGuests(); toast('Removed from the list.');
+      }
+    } catch (err) { toast(err.message); }
+  });
+  BY.armed($('guestClear'), 'Click again to clear the list', async function () {
+    try { var r = await BY.api('/api/org/events/' + eventId + '/guests', { method: 'DELETE' }); await loadGuests(); toast(r.removed + ' removed. Registrations are not affected.'); } catch (e) { toast(e.message); }
+  });
+
+  /* ---------- report ---------- */
+  var TZ = ''; try { TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  async function loadReport() {
+    var q = '?tz=' + encodeURIComponent(TZ);
+    $('repView').href = '/api/org/events/' + eventId + '/report.html' + q;
+    $('repDownload').href = '/api/org/events/' + eventId + '/report.html' + q + '&download=1';
+    try {
+      var r = await BY.api('/api/org/events/' + eventId + '/report' + q);
+      var tiles = [['Registered', r.registered], ['Checked in', r.checked_in], ['Turnout', r.turnout + '%'], ['Did not come', r.no_shows]];
+      if (r.expected) tiles.push(['Expected guests who came', r.expected.arrived + ' of ' + r.expected.total]);
+      if (r.peak_arrival) tiles.push(['Busiest time', r.peak_arrival.label]);
+      $('repTiles').innerHTML = tiles.map(function (t) { return '<div class="tile"><b>' + BY.esc(t[1]) + '</b><span>' + BY.esc(t[0]) + '</span></div>'; }).join('');
+      $('repHead').textContent = r.checked_in + ' of ' + r.registered + ' registered people have checked in' + (r.first_arrival ? '. First arrival ' + r.first_arrival + ', latest ' + r.last_arrival + ' (' + r.tz + ' time).' : '.');
+      $('repMailNote').textContent = r.mail_enabled ? 'The email goes to ' + r.email + ' with the full report attached.' : 'Emailing is not switched on for this server yet. Download the report instead, or ask whoever runs the server to set it up (see the README).';
+      $('repEmail').disabled = !r.mail_enabled;
+    } catch (e) { $('repErr').textContent = e.message; }
+  }
+  $('repEmail').addEventListener('click', async function () {
+    var b = this; $('repErr').textContent = ''; b.disabled = true; var old = b.textContent; b.textContent = 'Sending…';
+    try { var r = await BY.api('/api/org/events/' + eventId + '/report/email', { method: 'POST', body: { tz: TZ } }); toast('Sent to ' + r.sent_to + '.'); }
+    catch (e) { $('repErr').textContent = e.message; }
+    b.textContent = old; b.disabled = false;
+  });
+
+  /* ---------- Google Calendar picker ---------- */
+  var gEvents = [];
+  function gNote(t, bad) { $('gcalNote').textContent = t || ''; $('gcalNote').className = 'small' + (bad ? ' err' : ''); }
+  function gLabel(g) {
+    var d = new Date(g.start), when = g.all_day ? d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) + ' (all day)' : d.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return when + ' · ' + g.title;
+  }
+  async function gLoad() {
+    gNote('');
+    try {
+      gEvents = await BY.api('/api/org/google/events');
+      $('gcalPick').innerHTML = '<option value="">' + (gEvents.length ? 'Choose an event from your calendar' : 'No upcoming events found') + '</option>' + gEvents.map(function (g, i) { return '<option value="' + i + '">' + BY.esc(gLabel(g)) + '</option>'; }).join('');
+    } catch (e) {
+      if (e.status === 409) { await gStatus(); gNote(e.message, true); } else gNote(e.message, true);
+    }
+  }
+  async function gStatus() {
+    var st;
+    try { st = await BY.api('/api/org/google/status'); } catch (e) { return; }
+    $('gcal').hidden = false;
+    $('gcalConnect').hidden = true; $('gcalChoose').hidden = true;
+    if (!st.enabled) { $('gcalText').textContent = 'Google Calendar is not switched on for this server yet. You can still type the date below. Whoever runs the server can set it up (see the README).'; return; }
+    if (!st.connected) {
+      $('gcalText').textContent = 'Connect your Google Calendar and choose the event from a list. We only read your upcoming events, and we never change your calendar.';
+      $('gcalConnect').hidden = false;
+      $('gcalLink').href = '/api/org/google/connect?return=' + encodeURIComponent(location.pathname);
+      return;
+    }
+    $('gcalText').textContent = 'Connected' + (st.email ? ' as ' + st.email : '') + '. Choose an event and its date, time and place are filled in below. Nothing is saved until you press save.';
+    $('gcalChoose').hidden = false; $('gcalChoose').style.display = 'grid';
+    await gLoad();
+  }
+  $('gcalPick').addEventListener('change', function () {
+    var g = gEvents[Number(this.value)]; if (!g) return;
+    var start = g.all_day ? g.start + 'T09:00' : g.start;
+    $('startsAt').value = toLocalInput(start);
+    $('endsAt').value = g.all_day ? '' : toLocalInput(g.end);
+    if (g.location) $('venue').value = g.location;
+    if (!$('name').value.trim()) $('name').value = g.title;
+    if (!$('description').value.trim() && g.description) $('description').value = g.description;
+    ['name', 'startsAt'].forEach(function (id) { $(id).dispatchEvent(new Event('input')); });
+    gNote(g.all_day ? 'Filled in the day. It is an all-day event, so check the start time.' : 'Filled in the date, time' + (g.location ? ' and place' : '') + '. Review it, then save.');
+  });
+  $('gcalRefresh').onclick = gLoad;
+  BY.armed($('gcalOff'), 'Click again to disconnect', async function () {
+    try { await BY.api('/api/org/google', { method: 'DELETE' }); gNote('Disconnected.'); await gStatus(); } catch (e) { gNote(e.message, true); }
+  });
+  (function () {
+    var q = new URLSearchParams(location.search).get('google');
+    if (q) {
+      window.__gq = q;
+      var m = { connected: 'Google Calendar connected.', declined: 'You did not approve access on Google, so nothing was connected.', failed: 'Google sign-in did not finish. Try again.', unavailable: 'Google Calendar is not switched on for this server.' };
+      try { history.replaceState(null, '', location.pathname); } catch (e) {}
+      setTimeout(function () { gNote(m[q] || '', q !== 'connected'); }, 0);
+    }
+  })();
+  if (!desk) gStatus();
+
+  /* ---------- delete ---------- */
+  $('del').onclick = async function () {
+    $('delErr').textContent = '';
+    try { await BY.api('/api/org/events/' + eventId, { method: 'DELETE', body: { confirm: $('confirmDel').value.trim() } }); location.href = '/dashboard'; }
+    catch (e) { $('delErr').textContent = e.message; }
+  };
+
+  /* ---------- boot ---------- */
+  if (isNew) {
+    document.title = 'New event · bọyọ';
+    $('eyebrow').textContent = 'New event'; $('heading').textContent = 'Set up your event';
+    $('formTitle').textContent = 'Event details'; $('save').textContent = 'Create event';
+    $('p-details').hidden = false;
+    renderPreview();
+  } else {
+    try { ev = await BY.api('/api/org/events/' + eventId); }
+    catch (e) { $('heading').textContent = 'Event not found'; return; }
+    $('tabs').hidden = false; $('danger').hidden = desk;
+    if (desk) {
+      document.querySelector('[data-tab=details]').hidden = true; document.querySelector('[data-tab=report]').hidden = true;
+      ['gateKeyRow', 'rotate', 'keyNote', 'csv', 'guestImport', 'guestClear', 'guestCsv'].forEach(function (id) { var n = $(id); if (n) n.hidden = true; });
+      $('scanText').textContent = 'You are signed in, so the scanner opens without a key. Open it on a phone, allow the camera and scan tickets.';
+    }
+    header(); fillForm(ev); setTab(window.__gq ? 'details' : 'overview');
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Render Blueprint: New > Blueprint > pick your repo.
+# SQLite and uploaded flyers live on a persistent disk, which needs a paid instance type.
+services:
+  - type: web
+    name: boyo
+    runtime: docker
+    plan: starter
+    healthCheckPath: /healthz
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+      # Signs tickets and sessions. Changing it signs everyone out and invalidates issued tickets.
+      - key: TICKET_SECRET
+        generateValue: true
+      # Organizers need this code to create an account. Share it only with people you want hosting events.
+      # To let anyone sign up instead, delete this variable and add ALLOW_PUBLIC_SIGNUP=true.
+      - key: SIGNUP_CODE
+        generateValue: true
+      # Optional: switches on "Email it to me" for event reports. Use any SMTP provider.
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      # Optional: Google Calendar. Register <PUBLIC_URL>/api/google/callback in Google Cloud (see README).
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: GOOGLE_ATTENDEE_ADD
+        sync: false

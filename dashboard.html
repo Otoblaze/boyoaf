@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your events · bọyọ</title>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta name="theme-color" content="#f4efe6">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap mid">
+  <div class="topbar">
+    <a class="brand" href="/dashboard" aria-label="bọyọ home"><svg class="logo" role="img" aria-label="bọyọ"><use href="/brand/sprite.svg#logo"/></svg></a>
+    <div class="actions"><span class="muted small" id="orgName"></span><button class="ghost" id="logout" type="button">Sign out</button></div>
+  </div>
+
+  <div class="topbar">
+    <h1>Your events</h1>
+    <a class="btn" id="newEvent" href="/dashboard/events/new">New event</a>
+  </div>
+  <p class="muted" id="lead" hidden>You are signed in as front desk. Open an event to check people in and look up attendees.</p>
+
+  <div id="list" class="rows" style="gap:12px"></div>
+
+  <section class="card" id="team" hidden style="margin-top:20px">
+    <header><h2>Front desk logins</h2><p>Give each person on your information desk their own login. They can see an event's attendees and guest list, check people in and scan tickets. They cannot change event details, see the gate key or export data. Remove a login and that person is signed out at once.</p></header>
+    <div id="teamRows" class="rows"></div>
+    <form id="teamForm" style="display:grid;gap:10px;margin-top:6px" novalidate>
+      <div class="fields">
+        <label class="f" for="tName">Name<input type="text" id="tName" maxlength="80" placeholder="e.g. Front desk 1" autocomplete="off"></label>
+        <label class="f" for="tUser">Login<input type="text" id="tUser" maxlength="60" placeholder="e.g. desk1.gdguyo" autocomplete="off" autocapitalize="none"></label>
+        <label class="f" for="tPass">Password<input type="text" id="tPass" autocomplete="off" placeholder="At least 8 characters"></label>
+      </div>
+      <div class="actions"><button class="btn small" type="submit">Add login</button><button class="btn small line" id="tGen" type="button">Make a password</button><span class="err" id="tErr" role="alert"></span></div>
+      <div id="tMade" class="small" aria-live="polite"></div>
+    </form>
+  </section>
+</div>
+
+<script src="/app.js"></script>
+<script>
+(async function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var org, role = 'owner', who = '';
+  try { var me = await BY.api('/api/org/me'); org = me.org; role = me.role; who = me.staff_name || ''; } catch (e) { location.replace('/login'); return; }
+  $('orgName').textContent = org.name + (role === 'desk' ? ' · ' + who : '');
+  if (role === 'desk') { $('newEvent').hidden = true; $('lead').hidden = false; }
+  $('logout').onclick = async function () { try { await BY.api('/api/org/logout', { method: 'POST' }); } catch (e) {} location.href = '/login'; };
+
+  var events = await BY.api('/api/org/events');
+  if (role === 'owner') team();
+  if (!events.length) {
+    if (role === 'desk') { $('list').innerHTML = '<div class="card empty"><h2>No events yet</h2><p>Ask the account owner to create an event. It will appear here.</p></div>'; return; }
+    $('list').innerHTML = '<div class="card empty"><h2>Create your first event</h2><p>Upload a flyer and we will build the event page, ticket design and gate scanner around it.</p><a class="btn" href="/dashboard/events/new">Set up an event</a></div>';
+    return;
+  }
+  $('list').innerHTML = events.map(function (e) {
+    var visual = e.flyer_url
+      ? '<img class="thumb" alt="" src="' + BY.esc(e.flyer_url) + '">'
+      : '<div class="swatch" style="background:' + BY.esc(e.theme.bg) + ';border-color:' + BY.esc(e.theme.accent) + '"></div>';
+    var when = e.starts_at ? BY.fmtDateTime(e.starts_at) : 'Date not set';
+    return '<div class="card" style="display:flex;flex-wrap:wrap;align-items:center;gap:14px">' + visual +
+      '<div style="min-width:0;flex:1 1 180px"><h3>' + BY.esc(e.name) + '</h3><div class="muted small">' + BY.esc(when) + '</div>' +
+      '<div class="small" style="margin-top:4px">' + e.registered + ' registered · ' + e.checked_in + ' checked in' +
+      (e.registration_open ? '' : ' · <span class="pill x">Registration closed</span>') + '</div></div>' +
+      '<div class="actions" style="justify-content:flex-end"><a class="btn small" href="/dashboard/events/' + e.id + '">Manage</a>' +
+      '<a class="btn small line" href="/e/' + BY.esc(e.slug) + '" target="_blank" rel="noopener">View page</a></div></div>';
+  }).join('');
+  function team() {
+    $('team').hidden = false;
+    var rows = [];
+    async function load() {
+      try { rows = await BY.api('/api/org/staff'); } catch (e) { return; }
+      $('teamRows').innerHTML = rows.length ? rows.map(function (m) {
+        return '<div class="row"><div><b>' + BY.esc(m.name) + '</b><div class="sub">Login: ' + BY.esc(m.username) + ' · ' + (m.last_login_at ? 'last signed in ' + BY.esc(BY.fmtDateTime(m.last_login_at)) : 'never signed in') + '</div></div>' +
+          '<div class="actions"><button class="btn small line" data-pw="' + m.id + '" type="button">New password</button><button class="btn small line" data-rm="' + m.id + '" type="button">Remove</button></div></div>';
+      }).join('') : '<p class="muted small">No front desk logins yet. Add one below.</p>';
+    }
+    var armed = null;
+    $('teamRows').addEventListener('click', async function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      try {
+        if (b.dataset.pw) {
+          var p = (prompt('New password for this login (at least 8 characters):') || '').trim(); if (!p) return;
+          await BY.api('/api/org/staff/' + b.dataset.pw, { method: 'PATCH', body: { password: p } });
+          $('tMade').textContent = 'Password changed. Tell that person the new password.';
+        } else if (b.dataset.rm) {
+          if (armed !== b.dataset.rm) { armed = b.dataset.rm; b.textContent = 'Confirm'; setTimeout(function () { armed = null; b.textContent = 'Remove'; }, 3000); return; }
+          await BY.api('/api/org/staff/' + b.dataset.rm, { method: 'DELETE' }); armed = null; await load();
+        }
+      } catch (err) { $('tErr').textContent = err.message; }
+    });
+    $('tGen').onclick = function () {
+      var w = ['river', 'lamp', 'cedar', 'mango', 'tide', 'ember', 'plum', 'stone', 'amber', 'kite'], a = new Uint32Array(3); crypto.getRandomValues(a);
+      $('tPass').value = w[a[0] % 10] + '-' + w[a[1] % 10] + '-' + (1000 + a[2] % 9000);
+    };
+    $('teamForm').addEventListener('submit', async function (e) {
+      e.preventDefault(); $('tErr').textContent = ''; $('tMade').textContent = '';
+      var u = $('tUser').value.trim().toLowerCase(), p = $('tPass').value;
+      try {
+        await BY.api('/api/org/staff', { method: 'POST', body: { name: $('tName').value, username: u, password: p } });
+        $('tMade').innerHTML = 'Added. Give this person: login <b>' + BY.esc(u) + '</b> and password <b>' + BY.esc(p) + '</b>. The password is not shown again.';
+        $('teamForm').reset(); await load();
+      } catch (err) { $('tErr').textContent = err.message; }
+    });
+    load();
+  }
+})();
+</script>
+</body>
+</html>

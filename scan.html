@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Gate scanner</title>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta name="theme-color" content="#f4efe6">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <div class="card" id="login">
+    <header><h1 id="loginTitle">Gate scanner</h1><p>Enter the gate key from the organizer to load the attendee list onto this device.</p></header>
+    <label class="f" for="key">Gate key<input type="password" id="key" autocomplete="off"></label>
+    <div class="actions"><button class="btn" id="loginBtn" type="button">Start scanning</button></div>
+    <div class="err" id="loginErr" role="alert"></div>
+  </div>
+
+  <div id="app" hidden style="display:grid;gap:16px">
+    <div class="card" style="gap:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="count" id="count"></div>
+        <span class="net" id="net">Online</span>
+      </div>
+      <div class="mono" id="queued"></div>
+      <div class="muted small" id="evName"></div>
+    </div>
+
+    <div class="card">
+      <video id="video" playsinline muted></video>
+      <div id="result" role="status" aria-live="polite">Point the camera at a ticket</div>
+      <div class="actions">
+        <button class="btn small line" id="syncBtn" type="button">Sync now</button>
+        <button class="btn small line" id="camBtn" type="button">Restart camera</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <header><h2>Can't scan? Search by name, email or phone</h2></header>
+      <label class="f" for="search">Search<input type="text" id="search" placeholder="Start typing" autocomplete="off"></label>
+      <div class="rows" id="matches"></div>
+    </div>
+
+    <div class="card">
+      <h3>Recent scans</h3>
+      <div class="log" id="log"><span class="muted small">No scans yet.</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+<script src="/vendor/jsqr.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var slug = decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] || '').toLowerCase();
+  var KEY_STORE = 'gate:' + slug;       // per event: key, list, queue, log
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(KEY_STORE + ':' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(KEY_STORE + ':' + k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  var key = store.get('key', '');
+  var attendees = store.get('list', []);
+  var queue = store.get('queue', []);
+  var log = store.get('log', []);
+  var eventInfo = store.get('event', null);
+  var byToken = new Map();
+  var lastScan = { token: '', at: 0 };
+  var useCookie = false;     // owning organizer signed in on this device: no key needed
+
+  // A key can arrive in the link (#k=...). Take it, then remove it from the address bar.
+  var m = /[#&]k=([^&]+)/.exec(location.hash);
+  if (m) { key = decodeURIComponent(m[1]); store.set('key', key); try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+
+  function reindex() { byToken = new Map(attendees.map(function (a) { return [a.token, a]; })); }
+  function persist() { store.set('list', attendees); store.set('queue', queue); store.set('log', log); }
+  function api(path, opts) {
+    opts = opts || {}; opts.headers = Object.assign({}, opts.headers || {}, key ? { 'x-gate-key': key } : {});
+    return BY.api('/api/gate/' + encodeURIComponent(slug) + path, opts);
+  }
+
+  function renderStatus() {
+    var inCount = attendees.filter(function (a) { return a.checked_in_at; }).length;
+    $('count').innerHTML = inCount + ' <small>of ' + attendees.length + ' checked in</small>';
+    $('queued').textContent = queue.length ? queue.length + ' check-in' + (queue.length > 1 ? 's' : '') + ' waiting to sync' : (navigator.onLine ? 'Everything is synced' : 'Offline. Scans are saved on this device.');
+    $('net').textContent = navigator.onLine ? 'Online' : 'Offline';
+    $('net').className = 'net' + (navigator.onLine ? '' : ' off');
+    $('log').innerHTML = log.length ? log.map(function (l) {
+      var cls = l.state === 'synced' ? 'in' : l.state === 'queued' ? 'q' : (l.state === 'duplicate' ? '' : 'x');
+      return '<div><span>' + BY.esc(BY.fmtTime(l.t)) + ' · ' + BY.esc(l.name) + '</span><span class="pill ' + cls + '">' + BY.esc(l.state) + '</span></div>';
+    }).join('') : '<span class="muted small">No scans yet.</span>';
+    if (eventInfo) { $('evName').textContent = eventInfo.name; document.title = 'Scan · ' + eventInfo.name; }
+  }
+  function addLog(name, state) { log.unshift({ t: new Date().toISOString(), name: name, state: state }); log = log.slice(0, 8); }
+
+  async function loadManifest() {
+    var data = await api('/manifest');
+    var pending = {}; queue.forEach(function (q) { pending[q.token] = q.scannedAt; });
+    attendees = data.attendees.map(function (a) { return (pending[a.token] && !a.checked_in_at) ? Object.assign({}, a, { checked_in_at: pending[a.token] }) : a; });
+    eventInfo = data.event; store.set('event', eventInfo);
+    reindex(); persist(); renderStatus();
+  }
+
+  var flushing = false;
+  async function flushQueue() {
+    if (flushing || !queue.length || !navigator.onLine) return;
+    flushing = true;
+    try {
+      var sent = queue.slice(0, 200);
+      var res = await api('/sync', { method: 'POST', body: { scans: sent } });
+      var done = {}; res.results.forEach(function (r) { done[r.token] = r.status; });
+      queue = queue.filter(function (q) { return !(q.token in done); });
+      log.forEach(function (l) { if (l.state === 'queued') l.state = 'synced'; });
+      persist();
+      await loadManifest();
+    } catch (e) { if (e.status === 401) onBadKey(); }
+    flushing = false; renderStatus();
+  }
+
+  function show(kind, title, sub) {
+    var el = $('result'); el.className = kind || '';
+    el.innerHTML = '<b>' + BY.esc(title) + '</b>' + (sub ? '<span>' + BY.esc(sub) + '</span>' : '');
+  }
+  var audioCtx = null;
+  function beep(ok) {
+    try {
+      if (navigator.vibrate) navigator.vibrate(ok ? 60 : [120, 60, 120]);
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = ok ? 880 : 220; g.gain.value = 0.08; o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.12);
+    } catch (e) {}
+  }
+
+  function checkInLocal(a) {
+    if (a.checked_in_at) {
+      show('dup', 'Already checked in', a.name + ' at ' + BY.fmtTime(a.checked_in_at)); addLog(a.name, 'duplicate'); beep(false);
+    } else {
+      a.checked_in_at = new Date().toISOString();
+      queue.push({ token: a.token, scannedAt: a.checked_in_at });
+      addLog(a.name, 'queued');
+      show('ok', 'Welcome, ' + a.name, [a.role, a.organization].filter(Boolean).join(' · ')); beep(true);
+    }
+    persist(); renderStatus();
+    flushQueue();
+  }
+
+  async function handleToken(token) {
+    var now = Date.now();
+    if (token === lastScan.token && now - lastScan.at < 3000) return;   // ignore the camera re-reading the same code
+    lastScan = { token: token, at: now };
+    var a = byToken.get(token);
+    if (a) return checkInLocal(a);
+    // Not on this device's list. It may be someone who registered after the list was loaded, so ask the server.
+    if (navigator.onLine) {
+      try {
+        var r = await api('/checkin', { method: 'POST', body: { token: token } });
+        if (r.status === 'ok') { show('ok', 'Welcome, ' + r.name, [r.role, r.organization].filter(Boolean).join(' · ')); addLog(r.name, 'synced'); beep(true); await loadManifest(); }
+        else if (r.status === 'duplicate') { show('dup', 'Already checked in', r.name + ' at ' + BY.fmtTime(r.checked_in_at)); addLog(r.name, 'duplicate'); beep(false); }
+        else if (r.status === 'wrong_event') { show('bad', 'Wrong event', 'This ticket is for a different event'); addLog('Other event', 'wrong event'); beep(false); }
+        else { show('bad', 'Invalid ticket', 'This code is not recognized'); addLog('Unknown code', 'invalid'); beep(false); }
+      } catch (e) { show('bad', 'Could not check this ticket', 'Try again, or search by name'); beep(false); }
+    } else {
+      show('bad', 'Not on this device’s list', 'Reconnect to check it, or search by name'); addLog('Unknown code', 'not listed'); beep(false);
+    }
+    persist(); renderStatus();
+  }
+
+  /* ---------- camera ---------- */
+  var stream = null, detector = null, running = false;
+  async function startCamera() {
+    stopCamera();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { show('bad', 'Camera not available', 'Open this page over HTTPS, or use search below'); return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
+    catch (e) { show('bad', 'Camera blocked', 'Allow camera access in your browser, or use search below'); return; }
+    var video = $('video'); video.srcObject = stream; try { await video.play(); } catch (e) {}
+    if ('BarcodeDetector' in window) { try { detector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { detector = null; } }
+    running = true;
+    var canvas = document.createElement('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
+    (function tick() {
+      if (!running) return;
+      var go = function () { setTimeout(function () { requestAnimationFrame(tick); }, 120); };
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (detector) {
+          detector.detect(video).then(function (codes) { if (codes.length) handleToken(codes[0].rawValue); }).catch(function () {}).then(go);
+          return;
+        }
+        if (window.jsQR) {
+          var w = Math.min(video.videoWidth, 640), h = Math.round(video.videoHeight * (w / video.videoWidth));
+          canvas.width = w; canvas.height = h; ctx.drawImage(video, 0, 0, w, h);
+          var code = window.jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+          if (code) handleToken(code.data);
+        }
+      }
+      go();
+    })();
+  }
+  function stopCamera() { running = false; if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stopCamera(); else if (!$('app').hidden) startCamera(); });
+
+  /* ---------- manual search ---------- */
+  $('search').addEventListener('input', function () {
+    var q = this.value.trim().toLowerCase(), box = $('matches');
+    if (q.length < 2) { box.innerHTML = ''; return; }
+    var hits = attendees.filter(function (a) { return [a.name, a.email, a.phone, a.id].join(' ').toLowerCase().indexOf(q) !== -1; }).slice(0, 8);
+    box.innerHTML = hits.map(function (a) {
+      return '<div class="row"><div><b>' + BY.esc(a.name) + '</b><div class="sub">' + BY.esc([a.email, a.organization].filter(Boolean).join(' · ')) + '</div></div>' +
+        (a.checked_in_at ? '<span class="pill in">In ' + BY.esc(BY.fmtTime(a.checked_in_at)) + '</span>' : '<button class="btn small" data-token="' + BY.esc(a.token) + '" type="button">Check in</button>') + '</div>';
+    }).join('') || '<p class="muted small">No match on this device’s list.</p>';
+  });
+  $('matches').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-token]'); if (!b) return;
+    var a = byToken.get(b.dataset.token); if (a) { checkInLocal(a); $('search').dispatchEvent(new Event('input')); }
+  });
+
+  /* ---------- start up ---------- */
+  function onBadKey() { stopCamera(); key = ''; store.set('key', ''); $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = 'That gate key is not valid. Ask the organizer for the current one.'; }
+  async function boot() {
+    $('login').hidden = true; $('app').hidden = false; reindex(); renderStatus();
+    try { await loadManifest(); await flushQueue(); }
+    catch (e) {
+      if (e.status === 401) { onBadKey(); return; }
+      if (e.status === 404) { $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = 'We could not find that event. Check the scanner link.'; return; }
+      if (!attendees.length) show('bad', 'No attendee list yet', 'Connect to the internet once to load it');
+    }
+    startCamera();
+  }
+  $('loginBtn').onclick = async function () {
+    key = $('key').value.trim(); $('loginErr').textContent = '';
+    if (!key) { $('loginErr').textContent = 'Enter the gate key.'; return; }
+    try { await loadManifest(); store.set('key', key); boot(); }
+    catch (e) { $('loginErr').textContent = e.status === 401 ? 'That gate key is not valid.' : e.status === 404 ? 'We could not find that event.' : e.message; }
+  };
+  $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('loginBtn').click(); });
+  $('syncBtn').onclick = async function () { try { await flushQueue(); await loadManifest(); show('', 'Synced', ''); } catch (e) { show('bad', 'Could not sync', 'Check the connection'); } };
+  $('camBtn').onclick = startCamera;
+  window.addEventListener('online', function () { renderStatus(); flushQueue(); });
+  window.addEventListener('offline', renderStatus);
+  setInterval(flushQueue, 15000);
+
+  (async function init() {
+    // If the organizer is signed in on this device, the cookie is enough.
+    if (!key) { try { await BY.api('/api/org/me'); useCookie = true; } catch (e) {} }
+    if (key || useCookie) boot();
+  })();
+
+  // Keep a copy of this scanner page so it still opens after a reload with no network.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(function () { return navigator.serviceWorker.ready; })
+      .then(function () { return caches.open('gate-v2'); })
+      .then(function (c) { return c.add(location.pathname); })
+      .catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>

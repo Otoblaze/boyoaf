@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Your ticket</title>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta name="theme-color" content="#f4efe6">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <div id="box" class="card"><p class="muted">Loading your ticket…</p></div>
+  <div class="card small" id="cal" hidden>
+    <b>Add it to your calendar</b>
+    <p id="calMsg" class="muted" role="status" style="margin:4px 0 8px"></p>
+    <div class="actions"><a class="btn small" id="calGoogle" href="#">Add to Google Calendar</a><a class="btn small line" id="calIcs" href="#">Apple or Outlook (.ics)</a></div>
+  </div>
+  <section class="card" id="more" hidden aria-labelledby="moreH">
+    <header><h2 id="moreH">More events you can attend</h2><p>Other upcoming events on bọyọ that are open for registration.</p></header>
+    <div class="rows" id="moreList" style="gap:10px"></div>
+  </section>
+  <div class="card small muted" id="tips" hidden>
+    <span>Show this code at the entrance. Take a screenshot so you can open it even without data.</span>
+    <span>This page is your ticket. Do not share the link, because anyone who has it can use your entry.</span>
+    <div class="actions"><a id="evLink" href="#">Event page</a><a id="dirLink" href="#">Attendee directory</a></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+<script>
+(async function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var token = decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] || '');
+  var t;
+  try { t = await BY.api('/api/ticket/' + encodeURIComponent(token)); }
+  catch (e) { $('box').innerHTML = '<h2>This ticket link is not valid</h2><p class="muted">Check the link in your confirmation, or register again from the event page.</p><a class="btn" href="/">Back to home</a>'; return; }
+
+  var ev = t.event;
+  BY.applyTheme(ev.theme);
+  document.title = 'Ticket · ' + ev.name;
+  $('box').style.background = 'transparent'; $('box').style.border = '0'; $('box').style.padding = '0';
+  var when = ev.starts_at ? BY.fmtDateTime(ev.starts_at) : '';
+  $('box').innerHTML =
+    '<div class="stub"><div class="head"><div class="mono">ADMIT ONE</div><b>' + BY.esc(ev.name) + '</b></div>' +
+    '<div class="qr"><img alt="Your entry QR code" src="' + t.qr + '"></div>' +
+    '<div class="foot"><div class="nm">' + BY.esc(t.name) + '</div>' +
+    '<div class="muted small">' + BY.esc([t.role, t.organization].filter(Boolean).join(' · ')) + '</div>' +
+    (when || ev.venue ? '<div class="muted small" style="margin-top:6px">' + BY.esc(when) + (when && ev.venue ? '<br>' : '') + BY.esc(ev.venue || '') + '</div>' : '') +
+    '<div class="mono" style="margin-top:6px">ID ' + BY.esc(t.id) + '</div>' +
+    '<div><span class="pill ' + (t.checked_in_at ? 'in' : '') + '">' + (t.checked_in_at ? 'Checked in ' + BY.esc(BY.fmtTime(t.checked_in_at)) : 'Not checked in yet') + '</span></div></div></div>';
+  $('tips').hidden = false;
+  BY.api('/api/ticket/' + encodeURIComponent(token) + '/upcoming').then(function (list) {
+    if (!list || !list.length) return;
+    $('moreList').innerHTML = list.map(function (u) {
+      var thumb = u.flyer_url ? '<img class="thumb" alt="" src="' + BY.esc(u.flyer_url) + '">' : '<div class="swatch" style="background:' + BY.esc(u.theme.bg) + ';border-color:' + BY.esc(u.theme.accent) + '"></div>';
+      var meta = [BY.esc(u.org_name), BY.esc(BY.fmtDateTime(u.starts_at)), BY.esc(u.venue || '')].filter(Boolean).join(' · ');
+      var left = u.spots_left != null && u.spots_left <= 25 ? '<span class="pill q">' + u.spots_left + ' spots left</span>' : '';
+      return '<a class="evcard" href="/e/' + encodeURIComponent(u.slug) + '">' + thumb +
+        '<div><b>' + BY.esc(u.name) + '</b>' + (u.tagline ? '<div class="muted small">' + BY.esc(u.tagline) + '</div>' : '') + '<div class="muted small">' + meta + '</div>' + left + '</div>' +
+        '<span class="btn small">Register</span></a>';
+    }).join('');
+    $('more').hidden = false;
+  }).catch(function () {});
+  if (ev.starts_at) {
+    var qs = new URLSearchParams(location.search).get('calendar'), tokenQ = encodeURIComponent(token), page = location.origin + '/e/' + encodeURIComponent(ev.slug);
+    var said = { added: 'Added to your Google Calendar, with a reminder one hour before.', already: 'This event is already in your Google Calendar.', declined: 'You did not approve it on Google, so nothing was added. You can try again.', failed: 'Google could not add it. Try again, or use the other option.', unavailable: 'Adding straight to Google is not switched on here. Use the link below.' };
+    $('cal').hidden = false; $('calMsg').textContent = said[qs] || (ev.calendar_auto ? 'One tap and it is in your Google Calendar.' : 'Save the date so you do not miss it.');
+    $('calGoogle').href = ev.calendar_auto ? '/api/google/attendee/start?token=' + tokenQ : BY.gcalLink(ev, page);
+    if (!ev.calendar_auto) { $('calGoogle').target = '_blank'; $('calGoogle').rel = 'noopener'; }
+    $('calIcs').href = '/api/ticket/' + tokenQ + '/calendar.ics';
+    if (qs === 'added' || qs === 'already') $('calGoogle').hidden = true;
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  }
+  $('evLink').href = '/e/' + encodeURIComponent(ev.slug);
+  $('dirLink').href = '/e/' + encodeURIComponent(ev.slug) + '/community';
+})();
+</script>
+<a class="powered" href="/" aria-label="Powered by bọyọ"><span>Powered by</span><svg class="logo" role="img" aria-label="bọyọ"><use href="/brand/sprite.svg#logo"/></svg></a>
+</body>
+</html>

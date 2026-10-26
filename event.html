@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--OG-->
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta name="theme-color" content="#f4efe6">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="evt">
+  <div class="by" id="by"></div>
+
+  <div class="card empty" id="notfound" hidden>
+    <h2>We could not find that event</h2>
+    <p>Check the link you were sent, or ask the organizer to share it again.</p>
+  </div>
+
+  <div class="evt-grid" id="grid" hidden>
+    <figure id="flyerCol" style="margin:0" hidden><img class="flyer" id="flyer" alt=""></figure>
+
+    <div style="display:grid;gap:16px;min-width:0">
+      <div><h1 id="name"></h1><p class="tagline" id="tagline"></p></div>
+      <div class="meta" id="meta"></div>
+      <p class="desc" id="desc"></p>
+
+      <div class="formcard" id="mine" hidden>
+        <b>You are registered.</b>
+        <div class="actions"><a class="btn" id="mineBtn" href="#">View my ticket</a><button class="btn line small" id="another" type="button">Register someone else</button></div>
+      </div>
+
+      <div class="formcard" id="closed" hidden><b id="closedMsg"></b></div>
+
+      <form class="formcard" id="form" novalidate hidden>
+        <h2>Register</h2>
+        <div class="fields">
+          <label class="f" for="fName">Full name *<input type="text" id="fName" autocomplete="name"></label>
+          <label class="f" for="fEmail">Email *<input type="email" id="fEmail" autocomplete="email"></label>
+          <label class="f" for="fOrg">Organization<input type="text" id="fOrg" autocomplete="organization"></label>
+          <label class="f" for="fRole">Role<input type="text" id="fRole"></label>
+          <label class="f" for="fPhone">Phone number (optional)<input type="tel" id="fPhone" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+234 801 234 5678"></label>
+        </div>
+        <label class="f" for="fInt">What are you interested in?<textarea id="fInt" placeholder="e.g. AI, product design, community building"></textarea></label>
+        <div style="display:grid;gap:8px">
+          <label class="check" for="cTerms"><input type="checkbox" id="cTerms"><span>My details can be used to manage my registration and entry. *</span></label>
+          <label class="check" for="cComm"><input type="checkbox" id="cComm"><span>Keep me in the loop with this community.</span></label>
+          <label class="check" for="cDir"><input type="checkbox" id="cDir"><span>List my name, role and interests in the attendee directory.</span></label>
+          <label class="check" for="cCal" id="calRow" hidden><input type="checkbox" id="cCal" checked><span>Add this event to my Google Calendar. Google will ask you to approve it on the next screen.</span></label>
+        </div>
+        <div class="actions"><button class="btn" id="submit" type="submit">Get my ticket</button><span class="err" id="err" role="alert"></span></div>
+      </form>
+
+      <p class="small"><a id="dirLink" href="#">See who is attending</a></p>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+<script>
+(async function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var slug = location.pathname.split('/').filter(Boolean)[1] || '';
+  var ev;
+  try { ev = await BY.api('/api/e/' + encodeURIComponent(slug)); }
+  catch (e) { $('notfound').hidden = false; document.title = 'Event not found'; return; }
+
+  BY.applyTheme(ev.theme);
+  document.title = ev.name;
+  $('by').textContent = ev.org_name ? 'Hosted by ' + ev.org_name : '';
+  $('name').textContent = ev.name;
+  $('tagline').textContent = ev.tagline;
+  $('tagline').hidden = !ev.tagline;
+  $('desc').textContent = ev.description;
+  $('desc').hidden = !ev.description;
+  $('dirLink').href = '/e/' + encodeURIComponent(ev.slug) + '/community';
+
+  if (ev.flyer_url) {
+    $('flyer').src = ev.flyer_url; $('flyer').alt = 'Flyer for ' + ev.name; $('flyerCol').hidden = false;
+  }
+  var meta = [];
+  if (ev.starts_at) meta.push('<div><b>When</b> ' + BY.esc(BY.fmtDateTime(ev.starts_at)) + '</div>');
+  if (ev.venue) meta.push('<div><b>Where</b> ' + BY.esc(ev.venue) + '</div>');
+  if (ev.capacity > 0 && !ev.full) {
+    var left = ev.capacity - ev.registered;
+    if (left <= Math.max(25, ev.capacity * 0.1)) meta.push('<div><b>Spots left</b> ' + left + '</div>');
+  }
+  $('meta').innerHTML = meta.join('');
+  $('grid').hidden = false;
+
+  var tokenKey = 'ticket:' + ev.slug, saved = null;
+  try { saved = localStorage.getItem(tokenKey); } catch (e) {}
+
+  if (!ev.registration_open || ev.full) {
+    $('closed').hidden = false;
+    $('closedMsg').textContent = ev.full ? 'This event is full.' : 'Registration for this event is closed.';
+  } else {
+    $('form').hidden = !!saved;
+  }
+  if (saved) {
+    $('mine').hidden = false; $('mineBtn').href = '/t/' + encodeURIComponent(saved);
+    $('another').onclick = function () { $('mine').hidden = true; if (ev.registration_open && !ev.full) $('form').hidden = false; };
+  }
+
+  $('calRow').hidden = !ev.calendar_auto;
+  // On a device that has registered for another event, fill in the details typed last time (never the consent boxes).
+  try {
+    var prof = JSON.parse(localStorage.getItem('boyo:profile') || 'null');
+    if (prof) { [['fName', 'name'], ['fEmail', 'email'], ['fOrg', 'organization'], ['fRole', 'role'], ['fPhone', 'phone']].forEach(function (p) { if (!$(p[0]).value && typeof prof[p[1]] === 'string') $(p[0]).value = prof[p[1]].slice(0, 200); }); }
+  } catch (x) {}
+  $('form').addEventListener('submit', async function (e) {
+    e.preventDefault(); $('err').textContent = '';
+    $('submit').disabled = true;
+    try {
+      var r = await BY.api('/api/e/' + encodeURIComponent(ev.slug) + '/register', { method: 'POST', body: {
+        name: $('fName').value, email: $('fEmail').value, organization: $('fOrg').value, role: $('fRole').value, phone: $('fPhone').value,
+        interests: $('fInt').value, consent_terms: $('cTerms').checked, consent_community: $('cComm').checked, consent_directory: $('cDir').checked
+      } });
+      if (r.existing) {
+        $('err').textContent = 'That email is already registered for this event. Open the ticket link you saved, or ask the organizer to send it again.';
+        $('submit').disabled = false; return;
+      }
+      try { localStorage.setItem(tokenKey, r.token); localStorage.setItem('boyo:profile', JSON.stringify({ name: $('fName').value, email: $('fEmail').value, organization: $('fOrg').value, role: $('fRole').value, phone: $('fPhone').value })); } catch (x) {}
+      location.href = (ev.calendar_auto && $('cCal').checked ? '/api/google/attendee/start?token=' : '/t/') + encodeURIComponent(r.token);
+    } catch (err) { $('err').textContent = err.message; $('submit').disabled = false; }
+  });
+})();
+</script>
+<a class="powered" href="/" aria-label="Powered by bọyọ"><span>Powered by</span><svg class="logo" role="img" aria-label="bọyọ"><use href="/brand/sprite.svg#logo"/></svg></a>
+</body>
+</html>
